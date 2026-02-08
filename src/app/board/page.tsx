@@ -147,7 +147,11 @@ export default async function BoardPage() {
               <div className="mt-3 space-y-3">
                 {(byStatus.get(status) ?? []).map((t) => (
                   <div key={t.id} className="border rounded p-2">
-                    <div className="text-sm font-medium">{t.title}</div>
+                    <div className="text-sm font-medium">
+                      <Link className="underline" href={`/task/${t.id}`}>
+                        {t.title}
+                      </Link>
+                    </div>
                     {t.description && (
                       <div className="text-xs text-muted-foreground mt-1">
                         {t.description}
