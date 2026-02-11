@@ -13,14 +13,17 @@ const STATUSES = [
   'canceled',
 ] as const
 
+const PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const
+
 type Status = (typeof STATUSES)[number]
+type Priority = (typeof PRIORITIES)[number]
 
 type TaskRow = {
   id: string
   title: string
   description: string | null
   status: Status
-  priority: 'low' | 'medium' | 'high' | 'urgent'
+  priority: Priority
   assigned_agent_id: string | null
   owner_id: string
   created_at: string
@@ -62,6 +65,7 @@ async function updateTask(formData: FormData) {
 
   const id = String(formData.get('id'))
   const status = String(formData.get('status')) as Status
+  const priority = String(formData.get('priority')) as Priority
   const assigned_agent_id = String(formData.get('assigned_agent_id') ?? '')
 
   const supabase = await createServerSupabase()
@@ -70,8 +74,13 @@ async function updateTask(formData: FormData) {
   } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const patch: { status: Status; assigned_agent_id: string | null } = {
+  const patch: {
+    status: Status
+    priority: Priority
+    assigned_agent_id: string | null
+  } = {
     status,
+    priority,
     assigned_agent_id: assigned_agent_id ? assigned_agent_id : null,
   }
 
@@ -231,7 +240,8 @@ export default async function TaskPage({
             <p className="text-sm text-muted-foreground mt-2">{t.description}</p>
           )}
           <p className="text-xs text-muted-foreground mt-3">
-            {t.status} · {t.priority} · updated {new Date(t.updated_at).toLocaleString()}
+            {t.status} · {t.priority} · updated{' '}
+            {new Date(t.updated_at).toLocaleString()}
           </p>
         </div>
 
@@ -257,6 +267,21 @@ export default async function TaskPage({
               {STATUSES.map((s) => (
                 <option key={s} value={s}>
                   {s}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="text-sm">
+            <div className="text-xs mb-1">Priority</div>
+            <select
+              name="priority"
+              defaultValue={t.priority}
+              className="border rounded px-2 py-1"
+            >
+              {PRIORITIES.map((p) => (
+                <option key={p} value={p}>
+                  {p}
                 </option>
               ))}
             </select>

@@ -13,20 +13,24 @@ const STATUSES = [
   'canceled',
 ] as const
 
+const PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const
+
 type Status = (typeof STATUSES)[number]
+type Priority = (typeof PRIORITIES)[number]
 
 type TaskRow = {
   id: string
   title: string
   description: string | null
   status: Status
-  priority: 'low' | 'medium' | 'high' | 'urgent'
+  priority: Priority
   updated_at: string
 }
 
 type BoardSearchParams = {
   q?: string
   status?: Status
+  priority?: Priority
   since?: 'today'
 }
 
@@ -34,6 +38,19 @@ function buildTodayIsoStart() {
   const d = new Date()
   d.setHours(0, 0, 0, 0)
   return d.toISOString()
+}
+
+function priorityClass(p: Priority) {
+  switch (p) {
+    case 'urgent':
+      return 'bg-red-100 text-red-900 border-red-200'
+    case 'high':
+      return 'bg-orange-100 text-orange-900 border-orange-200'
+    case 'medium':
+      return 'bg-slate-100 text-slate-900 border-slate-200'
+    case 'low':
+      return 'bg-emerald-100 text-emerald-900 border-emerald-200'
+  }
 }
 
 async function moveTask(formData: FormData) {
@@ -89,6 +106,7 @@ export default async function BoardPage({
   const sp = await searchParams
   const q = (sp.q ?? '').trim()
   const status = sp.status
+  const priority = sp.priority
   const since = sp.since
 
   const supabase = await createServerSupabase()
@@ -105,6 +123,7 @@ export default async function BoardPage({
     .order('updated_at', { ascending: false })
 
   if (status) query = query.eq('status', status)
+  if (priority) query = query.eq('priority', priority)
 
   if (since === 'today') {
     query = query.gte('updated_at', buildTodayIsoStart())
@@ -133,13 +152,14 @@ export default async function BoardPage({
     byStatus.get(t.status)?.push(t)
   })
 
-  const isFiltered = Boolean(q || status || since)
+  const isFiltered = Boolean(q || status || priority || since)
 
   const quick = {
     all: '/board',
     inbox: '/board?status=inbox',
     needsNico: '/board?status=needs_nico',
     today: '/board?since=today',
+    urgent: '/board?priority=urgent',
   }
 
   return (
@@ -197,6 +217,9 @@ export default async function BoardPage({
               <Link className="underline" href={quick.today}>
                 Updated hoy
               </Link>
+              <Link className="underline" href={quick.urgent}>
+                Urgent
+              </Link>
               {isFiltered && (
                 <Link className="underline" href="/board">
                   Limpiar filtros
@@ -207,14 +230,15 @@ export default async function BoardPage({
             {isFiltered && (
               <div className="mt-2 text-xs text-muted-foreground">
                 Filtros activos:{' '}
-                {q ? `q="${q}" ` : ''}
+                {q ? `q=\"${q}\" ` : ''}
                 {status ? `status=${status} ` : ''}
+                {priority ? `priority=${priority} ` : ''}
                 {since ? `since=${since}` : ''}
               </div>
             )}
           </div>
 
-          <form method="get" className="flex gap-2">
+          <form method="get" className="flex flex-wrap gap-2">
             <input
               name="q"
               defaultValue={q}
@@ -234,6 +258,18 @@ export default async function BoardPage({
               ))}
             </select>
             <select
+              name="priority"
+              defaultValue={priority ?? ''}
+              className="border rounded px-3 py-2 text-sm"
+            >
+              <option value="">(cualquier prioridad)</option>
+              {PRIORITIES.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+            <select
               name="since"
               defaultValue={since ?? ''}
               className="border rounded px-3 py-2 text-sm"
@@ -245,7 +281,7 @@ export default async function BoardPage({
           </form>
         </div>
 
-        {!status && !q && !since ? (
+        {!status && !q && !priority && !since ? (
           <div className="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
             {STATUSES.map((s) => (
               <div key={s} className="border rounded p-3">
@@ -253,11 +289,22 @@ export default async function BoardPage({
                 <div className="mt-3 space-y-3">
                   {(byStatus.get(s) ?? []).map((t) => (
                     <div key={t.id} className="border rounded p-2">
-                      <div className="text-sm font-medium">
-                        <Link className="underline" href={`/task/${t.id}`}>
-                          {t.title}
-                        </Link>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="text-sm font-medium">
+                          <Link className="underline" href={`/task/${t.id}`}>
+                            {t.title}
+                          </Link>
+                        </div>
+                        <span
+                          className={`text-[10px] leading-4 px-2 py-0.5 border rounded-full ${priorityClass(
+                            t.priority
+                          )}`}
+                          title={`priority=${t.priority}`}
+                        >
+                          {t.priority}
+                        </span>
                       </div>
+
                       {t.description && (
                         <div className="text-xs text-muted-foreground mt-1">
                           {t.description}
