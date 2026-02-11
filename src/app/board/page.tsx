@@ -71,6 +71,32 @@ async function moveTask(formData: FormData) {
   if (error) throw new Error(error.message)
 }
 
+async function bulkUpdateTasks(formData: FormData) {
+  'use server'
+
+  const ids = formData.getAll('ids').map(String).filter(Boolean)
+  const status = String(formData.get('status') ?? '') as Status
+  const priority = String(formData.get('priority') ?? '') as Priority
+
+  if (ids.length === 0) return
+
+  const patch: Partial<{ status: Status; priority: Priority }> = {}
+  if (status) patch.status = status
+  if (priority) patch.priority = priority
+  if (Object.keys(patch).length === 0) return
+
+  const supabase = await createServerSupabase()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) redirect('/login')
+
+  // RLS should enforce owner_id; still keep server-side auth check.
+  const { error } = await supabase.from('tasks').update(patch).in('id', ids)
+  if (error) throw new Error(error.message)
+}
+
 async function createTask(formData: FormData) {
   'use server'
 
@@ -340,23 +366,77 @@ export default async function BoardPage({
           </div>
         ) : (
           <div className="mt-6 space-y-3">
+            <div className="border rounded p-3">
+              <div className="text-sm font-medium">Acciones en lote</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Selecciona tasks y aplica cambios de status/prioridad en un solo
+                click.
+              </p>
+
+              <form id="bulk" action={bulkUpdateTasks} className="mt-3 flex flex-wrap gap-2 items-end">
+                <label className="text-xs">
+                  <div className="mb-1">Status (opcional)</div>
+                  <select name="status" defaultValue="" className="text-xs border rounded px-2 py-1">
+                    <option value="">(no cambiar)</option>
+                    {STATUSES.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="text-xs">
+                  <div className="mb-1">Priority (opcional)</div>
+                  <select name="priority" defaultValue="" className="text-xs border rounded px-2 py-1">
+                    <option value="">(no cambiar)</option>
+                    {PRIORITIES.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <button className="text-xs border rounded px-3 py-2">
+                  Aplicar a seleccionadas
+                </button>
+              </form>
+
+              <div className="text-[11px] text-muted-foreground mt-2">
+                Tip: puedes filtrar arriba (p.ej. status=inbox) y luego mover 10 a
+                triage de una.
+              </div>
+            </div>
+
             {(tasks as TaskRow[] | null)?.map((t) => (
               <div key={t.id} className="border rounded p-3">
                 <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-medium">
-                      <Link className="underline" href={`/task/${t.id}`}>
-                        {t.title}
-                      </Link>
-                    </div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      status={t.status} • priority={t.priority}
-                    </div>
-                    {t.description && (
-                      <div className="text-xs text-muted-foreground mt-2">
-                        {t.description}
+                  <div className="flex gap-3">
+                    <input
+                      type="checkbox"
+                      name="ids"
+                      value={t.id}
+                      form="bulk"
+                      className="mt-1"
+                      aria-label={`Seleccionar ${t.title}`}
+                    />
+
+                    <div>
+                      <div className="text-sm font-medium">
+                        <Link className="underline" href={`/task/${t.id}`}>
+                          {t.title}
+                        </Link>
                       </div>
-                    )}
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        status={t.status} • priority={t.priority}
+                      </div>
+                      {t.description && (
+                        <div className="text-xs text-muted-foreground mt-2">
+                          {t.description}
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <form action={moveTask} className="flex gap-2">
